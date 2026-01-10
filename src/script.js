@@ -4,12 +4,7 @@
 
 let medications = [];
 let selectedMed = null;
-let currentSettings = {
-  packCount: 1,
-  tabletsPerDose: 1,
-  dosesPerDay: 1,
-  timing: 'на ночь'
-};
+let packCount = 1;
 
 // ==========================================
 // Инициализация
@@ -58,8 +53,7 @@ function getMedicationsFallback() {
 // ==========================================
 
 function getPharmacyLink(innRus) {
-  const encoded = encodeURIComponent(innRus);
-  return `https://aptekamos.ru/tovary?q=${encoded}`;
+  return `https://aptekamos.ru/tovary?q=${encodeURIComponent(innRus)}`;
 }
 
 // ==========================================
@@ -76,38 +70,39 @@ function renderMedicationsList() {
     groups[med.group].push(med);
   });
   
-  const groupEmojis = {
-    'Снотворные': '🌙',
-    'Противоэпилептические': '⚡',
-    'Антипсихотики': '🧠',
-    'Анксиолитики': '😌'
+  const groupIcons = {
+    'Снотворные': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>',
+    'Противоэпилептические': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>',
+    'Антипсихотики': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>',
+    'Анксиолитики': '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
   };
   
   const colorClasses = {
-    indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
-    purple: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-    rose: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-    blue: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' }
+    indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', accent: 'border-indigo-400' },
+    purple: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', accent: 'border-purple-400' },
+    rose: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', accent: 'border-rose-400' },
+    blue: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', accent: 'border-blue-400' }
   };
   
   let html = '';
   
   for (const [groupName, meds] of Object.entries(groups)) {
     const color = colorClasses[meds[0].color] || colorClasses.blue;
-    const emoji = groupEmojis[groupName] || '💊';
+    const icon = groupIcons[groupName] || '';
     
     html += `
       <div class="mb-4">
         <div class="group-header ${color.bg} px-3 py-2 rounded-lg mb-2 border ${color.border}">
-          <span class="${color.text} font-semibold text-sm">${emoji} ${groupName}</span>
+          <span class="${color.text} font-semibold text-sm flex items-center gap-2">${icon} ${groupName}</span>
         </div>
         <div class="space-y-1">
     `;
     
     meds.forEach(med => {
       html += `
-        <div class="med-card bg-white rounded-lg p-3 shadow-sm border border-gray-100" 
+        <div class="med-card bg-white rounded-lg p-3 shadow-sm border border-gray-100 hover:${color.accent}" 
              data-med-id="${med.id}"
+             data-color="${med.color}"
              onclick="selectMedication(${med.id})">
           <div class="flex justify-between items-start">
             <div>
@@ -137,93 +132,109 @@ function selectMedication(id) {
   selectedMed = medications.find(m => m.id === id);
   if (!selectedMed) return;
   
-  document.querySelectorAll('.med-card').forEach(card => {
-    card.classList.remove('active');
-  });
+  // Подсветка активной карточки
+  document.querySelectorAll('.med-card').forEach(card => card.classList.remove('active'));
   document.querySelector(`[data-med-id="${id}"]`)?.classList.add('active');
   
-  resetToOptimalSettings();
+  // Сброс количества упаковок
+  packCount = 1;
+  document.getElementById('pack-count').textContent = packCount;
   
+  // Показ панели настроек
   document.getElementById('settings-panel')?.classList.remove('hidden');
   
-  updateRecipeForm();
-  updateSettingsPanel();
+  // Обновление ссылки на аптеку
+  const pharmacyLink = document.getElementById('pharmacy-link');
+  if (pharmacyLink) {
+    pharmacyLink.href = getPharmacyLink(selectedMed.innRus);
+    pharmacyLink.classList.remove('hidden');
+  }
   
+  updateRecipeForm();
   closeSidebar();
 }
 
 // ==========================================
-// Оптимальные настройки
+// Расчёт оптимальной дозировки
 // ==========================================
 
-function resetToOptimalSettings() {
-  if (!selectedMed) return;
-  
-  const quantity = selectedMed.quantity;
-  let packCount = 1;
-  let timing = 'на ночь';
-  let dosesPerDay = 1;
-  
-  if (selectedMed.innLat === 'Gabapentini') {
-    timing = 'утром и на ночь';
-    dosesPerDay = 2;
-    packCount = 2;
-  }
+function calculatePrescription() {
+  if (!selectedMed) return null;
   
   const totalTablets = selectedMed.quantity * packCount;
-  let tabletsPerDose = Math.ceil(totalTablets / (30 * dosesPerDay));
-  tabletsPerDose = Math.max(1, tabletsPerDose);
+  const isSleeping = selectedMed.group === 'Снотворные';
   
-  const maxPerDose = Math.floor(selectedMed.maxTabsPerDay / dosesPerDay);
-  if (tabletsPerDose > maxPerDose) {
-    tabletsPerDose = maxPerDose;
+  // Для снотворных - всегда 1 раз в день (на ночь)
+  // Для остальных - рассчитываем оптимальное количество приёмов
+  let dosesPerDay = 1;
+  let tabletsPerDose = 1;
+  
+  if (isSleeping) {
+    // Снотворные: максимум maxTabsPerDay за раз, 1 раз на ночь
+    tabletsPerDose = Math.min(selectedMed.maxTabsPerDay, Math.ceil(totalTablets / 28));
+    tabletsPerDose = Math.max(1, Math.min(tabletsPerDose, selectedMed.maxTabsPerDay));
+    dosesPerDay = 1;
+  } else {
+    // Остальные препараты: распределяем по дню
+    // Оптимально - чтобы хватило на ~28 дней
+    const targetDays = 28;
+    const targetDailyDose = Math.ceil(totalTablets / targetDays);
+    
+    if (targetDailyDose <= selectedMed.maxTabsPerDay) {
+      // Можно уложиться в лимит
+      if (targetDailyDose <= 1) {
+        dosesPerDay = 1;
+        tabletsPerDose = 1;
+      } else if (targetDailyDose <= 2) {
+        dosesPerDay = 2;
+        tabletsPerDose = 1;
+      } else if (targetDailyDose <= 3) {
+        dosesPerDay = 3;
+        tabletsPerDose = 1;
+      } else {
+        // Больше 3 - делим на 2-3 приёма
+        dosesPerDay = targetDailyDose <= 6 ? 2 : 3;
+        tabletsPerDose = Math.ceil(targetDailyDose / dosesPerDay);
+      }
+    } else {
+      // Используем максимальную дозу
+      dosesPerDay = selectedMed.maxTabsPerDay <= 3 ? selectedMed.maxTabsPerDay : 3;
+      tabletsPerDose = Math.floor(selectedMed.maxTabsPerDay / dosesPerDay);
+    }
+    
+    // Проверяем, чтобы не превысить maxTabsPerDay
+    while (tabletsPerDose * dosesPerDay > selectedMed.maxTabsPerDay && tabletsPerDose > 1) {
+      tabletsPerDose--;
+    }
   }
   
-  currentSettings = { packCount, tabletsPerDose, dosesPerDay, timing };
-}
-
-// ==========================================
-// Валидация
-// ==========================================
-
-function validatePrescription() {
-  if (!selectedMed) return { valid: true, warnings: [], errors: [] };
-  
-  const totalTablets = selectedMed.quantity * currentSettings.packCount;
-  const tabletsPerDay = currentSettings.tabletsPerDose * currentSettings.dosesPerDay;
+  const tabletsPerDay = tabletsPerDose * dosesPerDay;
   const days = Math.floor(totalTablets / tabletsPerDay);
   
-  const warnings = [];
-  const errors = [];
+  // Проверка на необходимость спецназначения
+  const needsExtraStamps = days > 28 || totalTablets > selectedMed.maxUnits;
   
-  if (tabletsPerDay > selectedMed.maxTabsPerDay) {
-    errors.push({
-      type: 'overdose',
-      message: `⚠️ Превышена макс. суточная доза! Максимум: ${selectedMed.maxTabsPerDay} ${selectedMed.formRus}/день`
-    });
-  }
-  
-  const needsExtraStamps = totalTablets > selectedMed.maxUnits || days > 30;
-  
-  if (needsExtraStamps) {
-    warnings.push({
-      type: 'extra_stamps',
-      message: '📝 Требуется дополнительное оформление',
-      details: [
-        '• Вторая печать врача',
-        '• Вторая треугольная печать',
-        '• Надпись "По спецназначению" + подпись'
-      ]
-    });
+  // Формирование времени приёма
+  let timing;
+  if (isSleeping) {
+    timing = 'на ночь';
+  } else if (dosesPerDay === 1) {
+    timing = 'утром';
+  } else if (dosesPerDay === 2) {
+    timing = 'утром и на ночь';
+  } else {
+    timing = '3 раза в день';
   }
   
   return {
-    valid: errors.length === 0,
-    needsExtraStamps,
-    warnings,
-    errors,
     totalTablets,
-    days
+    tabletsPerDose,
+    dosesPerDay,
+    tabletsPerDay,
+    days,
+    timing,
+    needsExtraStamps,
+    isSleeping
   };
 }
 
@@ -234,282 +245,190 @@ function validatePrescription() {
 function updateRecipeForm() {
   if (!selectedMed) return;
   
-  const validation = validatePrescription();
-  const { totalTablets, days, needsExtraStamps } = validation;
+  const calc = calculatePrescription();
+  if (!calc) return;
   
-  document.getElementById('recipe-container').innerHTML = generateRecipeHTML(days, needsExtraStamps, validation);
-  renderWarnings(validation);
+  // Показ toast при необходимости спецназначения
+  if (calc.needsExtraStamps) {
+    // showToast(
+    //   'warning',
+    //   'Требуется дополнительное оформление',
+    //   `<ul class="space-y-1 mt-2">
+    //     <li>• Вторая печать врача</li>
+    //     <li>• Вторая треугольная печать</li>
+    //     <li>• Надпись «По спецназначению» + подпись</li>
+    //   </ul>`
+    // );
+  } else {
+    hideToast();
+  }
+  
+  document.getElementById('recipe-container').innerHTML = generateRecipeHTML(calc);
 }
 
-function generateRecipeHTML(days, needsExtraStamps, validation) {
+function generateRecipeHTML(calc) {
   const med = selectedMed;
-  const totalTablets = med.quantity * currentSettings.packCount;
-  const tabletsInWords = numberToWords(currentSettings.tabletsPerDose);
-  const tabletWord = getTabletWord(currentSettings.tabletsPerDose);
-  const formWord = med.form === 'caps' ? 'капсуле' : 'таблетке';
-  const formWordPlural = med.form === 'caps' ? 'капсулы' : 'таблетки';
+  const tabletsInWords = numberToWords(calc.tabletsPerDose);
+  const formWord = getFormWord(med.form, calc.tabletsPerDose);
   
-  // Правильное склонение для Signa
-  let unitWord = formWord;
-  if (currentSettings.tabletsPerDose >= 2 && currentSettings.tabletsPerDose <= 4) {
-    unitWord = formWordPlural;
-  } else if (currentSettings.tabletsPerDose >= 5) {
-    unitWord = med.form === 'caps' ? 'капсул' : 'таблеток';
+  const signa = `Принимать по ${tabletsInWords} ${formWord} ${calc.timing} в течение ${calc.days} ${getDaysWord(calc.days)}`;
+  
+  let borderClass = 'border-gray-200';
+  if (calc.needsExtraStamps) {
+    borderClass = 'border-amber-400';
   }
-  
-  const signa = `Принимать по ${tabletsInWords} ${unitWord} ${currentSettings.timing} в течение ${days} ${getDaysWord(days)}`;
-  
-  let borderClass = 'border-gray-300';
-  if (validation.errors.length > 0) {
-    borderClass = 'border-red-500';
-  } else if (needsExtraStamps) {
-    borderClass = 'border-amber-500';
-  }
-  
-  const pharmacyUrl = getPharmacyLink(med.innRus);
   
   return `
-    <div class="recipe-form rounded-xl overflow-hidden border-2 ${borderClass}">
-      <!-- Шапка -->
-      <div class="recipe-header p-4 text-center">
-        <div class="stamp-zone mb-3 p-4">
-          <div class="stamp-circle">
-            <span>Печать<br>ЛПУ</span>
+    <div class="recipe-form rounded-xl overflow-hidden border-2 ${borderClass} relative">
+      
+      <!-- Плашка "По спецназначению" (если нужна) -->
+      ${calc.needsExtraStamps ? `
+        <div class="special-assignment-banner">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <span class="font-bold">«По спецназначению»</span>
+          <span class="text-sm opacity-80">+ подпись врача + 2× печати</span>
+        </div>
+      ` : ''}
+      
+      <!-- Компактная шапка -->
+      <div class="p-4 bg-gray-50 border-b border-gray-200">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-semibold text-gray-600">РЕЦЕПТУРНЫЙ БЛАНК</div>
+          <div class="text-xs text-gray-400">Форма № 148-1/у-88</div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div class="col-span-2 sm:col-span-1">
+            <span class="text-gray-500">Пациент:</span>
+            <span class="editable-field ml-1" contenteditable="true">Прокофьев В.Н.</span>
+          </div>
+          <div>
+            <span class="text-gray-500">Д.р.:</span>
+            <span class="editable-field ml-1" contenteditable="true">16.04.1980</span>
+          </div>
+          <div class="col-span-2">
+            <span class="text-gray-500">Карта/Адрес:</span>
+            <span class="editable-field ml-1" contenteditable="true">№ XX000000</span>
+          </div>
+          <div class="col-span-2">
+            <span class="text-gray-500">Врач:</span>
+            <span class="editable-field ml-1" contenteditable="true">Нестеров А.М.</span>
           </div>
         </div>
-        <div class="text-lg font-bold text-gray-800">📋 РЕЦЕПТУРНЫЙ БЛАНК</div>
-        <div class="text-sm text-gray-600">Форма № 148-1/у-88</div>
       </div>
       
-      <!-- Содержимое -->
-      <div class="p-5 space-y-4">
-        <!-- ФИО пациента -->
-        <div class="recipe-field">
-          <div class="recipe-field-label">👤 Ф.И.О. пациента</div>
-          <div class="recipe-field-value">
-            <span class="editable-field" contenteditable="true">Прокофьев В.Н.</span>
-          </div>
-        </div>
-        
-        <!-- Дата рождения -->
-        <div class="recipe-field">
-          <div class="recipe-field-label">📅 Дата рождения</div>
-          <div class="recipe-field-value">
-            <span class="editable-field" contenteditable="true">16.04.1980</span> г.
-          </div>
-        </div>
-        
-        <!-- Адрес -->
-        <div class="recipe-field">
-          <div class="recipe-field-label">🏠 Адрес или № медицинской карты</div>
-          <div class="recipe-field-value text-sm">
-            <span class="editable-field" contenteditable="true">№ XX000000<br>123456, г. Москва, ул. Трофимовская, д. 6, к. 1, кв. 111</span>
-          </div>
-        </div>
-        
-        <!-- ФИО врача -->
-        <div class="recipe-field">
-          <div class="recipe-field-label">👨‍⚕️ Ф.И.О. лечащего врача</div>
-          <div class="recipe-field-value">
-            <span class="editable-field" contenteditable="true">Нестеров А.М.</span>
-          </div>
-        </div>
+      <!-- Основная часть рецепта -->
+      <div class="p-5">
         
         <!-- Rx секция -->
-        <div class="rx-section ${validation.errors.length > 0 ? 'bg-red-50 border-red-500' : 'bg-blue-50 border-blue-500'} rounded-lg p-4 mt-6 border-l-4">
+        <div class="rx-section bg-blue-50 rounded-lg p-4 border-l-4 border-blue-500">
           <div class="rx-line">
-            <span class="font-bold ${validation.errors.length > 0 ? 'text-red-800' : 'text-blue-800'}">Rp.:</span> 
-            <span class="text-gray-800">${med.innLat} ${med.dosageGram}</span>
+            <span class="rx-label">Rp.:</span> 
+            <span class="rx-value">${med.innLat} ${med.dosageGram}</span>
           </div>
           <div class="rx-line">
-            <span class="font-bold ${validation.errors.length > 0 ? 'text-red-800' : 'text-blue-800'}">D.t.d.</span> 
-            <span class="text-gray-800">N ${totalTablets} in ${med.form}.</span>
+            <span class="rx-label">D.t.d.</span> 
+            <span class="rx-value">N ${calc.totalTablets} in ${med.form}.</span>
           </div>
           <div class="rx-line">
-            <span class="font-bold ${validation.errors.length > 0 ? 'text-red-800' : 'text-blue-800'}">S.:</span> 
-            <span class="text-gray-800">${signa}</span>
+            <span class="rx-label">S.:</span> 
+            <span class="rx-value">${signa}</span>
           </div>
         </div>
         
         <!-- Информация о препарате -->
-        <div class="bg-gray-50 rounded-lg p-4 text-sm mt-4">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-gray-600">💊 Торговое название:</span>
-            <span class="font-semibold text-gray-800">${med.tradeName} ${med.dosageMg} мг</span>
+        <div class="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
+          <div class="flex items-center gap-1">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+            </svg>
+            <span><strong>${med.tradeName}</strong> ${med.dosageMg} мг</span>
           </div>
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-gray-600">📦 Упаковок:</span>
-            <span class="font-semibold text-gray-800">${currentSettings.packCount} × ${med.quantity} = ${totalTablets} ${med.formRus}.</span>
+          <div class="flex items-center gap-1">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+            <span>${packCount} × ${med.quantity} = <strong>${calc.totalTablets} ${med.formRus}.</strong></span>
           </div>
-          <div class="flex justify-between items-center mb-3">
-            <span class="text-gray-600">📆 Хватит на:</span>
-            <span class="font-semibold ${days > 30 ? 'text-amber-600' : 'text-green-600'}">${days} ${getDaysWord(days)}</span>
-          </div>
-          
-          <!-- Ссылка на аптеку -->
-          <div class="pt-3 border-t border-gray-200">
-            <a href="${pharmacyUrl}" target="_blank" rel="noopener noreferrer" class="pharmacy-link">
-              🔍 Проверить наличие в аптеках
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-              </svg>
-            </a>
+          <div class="flex items-center gap-1">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span class="${calc.days > 28 ? 'text-amber-600 font-semibold' : 'text-green-600'}">${calc.days} ${getDaysWord(calc.days)}</span>
           </div>
         </div>
-        
-        <!-- Печати базовые -->
-        <div class="mt-6">
-          <div class="text-sm font-medium text-gray-600 mb-2">🔏 Печати (обязательные):</div>
-          <div class="grid grid-cols-2 gap-4">
-            <div class="stamp-zone p-3">
-              <div class="stamp-circle">
-                <span>Печать<br>врача</span>
-              </div>
-            </div>
-            <div class="stamp-zone p-3 flex flex-col items-center">
-              <div class="stamp-triangle"></div>
-              <span class="text-xs text-red-400 mt-2">Треугольная</span>
-            </div>
-          </div>
-        </div>
-        
-        ${needsExtraStamps ? generateExtraStampsHTML() : ''}
         
         <!-- Подпись -->
-        <div class="recipe-field mt-6">
-          <div class="recipe-field-label">✍️ Подпись врача и дата</div>
-          <div class="h-8 border-b border-gray-300"></div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function generateExtraStampsHTML() {
-  return `
-    <div class="bg-amber-50 border-2 border-amber-400 rounded-lg p-4 mt-4">
-      <div class="text-amber-800 font-semibold text-sm mb-3 flex items-center">
-        ⚠️ Требуются ДОПОЛНИТЕЛЬНО:
-      </div>
-      
-      <!-- Надпись "По спецназначению" -->
-      <div class="bg-white rounded-lg p-3 mb-3 border-2 border-dashed border-amber-400">
-        <div class="text-center">
-          <div class="text-lg font-bold text-amber-800 italic">✍️ "По спецназначению"</div>
-          <div class="text-xs text-amber-600 mt-1">← Написать от руки + подпись врача</div>
-        </div>
-      </div>
-      
-      <div class="text-sm text-amber-700 mb-2">Дополнительные печати:</div>
-      <div class="grid grid-cols-2 gap-4">
-        <div class="stamp-zone p-3 border-amber-400 bg-amber-50/50">
-          <div class="stamp-circle" style="border-color: #f59e0b;">
-            <span class="text-amber-600">Печать<br>врача №2</span>
+        <div class="mt-6 pt-4 border-t border-gray-200">
+          <div class="flex items-center justify-between text-sm text-gray-500">
+            <span>Подпись врача и дата:</span>
+            <div class="w-48 border-b border-gray-300"></div>
           </div>
         </div>
-        <div class="stamp-zone p-3 border-amber-400 bg-amber-50/50 flex flex-col items-center">
-          <div class="stamp-triangle" style="border-bottom-color: rgba(245, 158, 11, 0.2);"></div>
-          <span class="text-xs text-amber-500 mt-2">Треуг. №2</span>
-        </div>
       </div>
+      
+      <!-- Зона печатей (наложенная) -->
+      <div class="stamps-overlay">
+        <div class="stamp-item">
+          <div class="stamp-circle">
+            <span>Печать<br>врача</span>
+          </div>
+        </div>
+        <div class="stamp-item">
+          <div class="stamp-triangle"></div>
+        </div>
+        ${calc.needsExtraStamps ? `
+          <div class="stamp-item extra">
+            <div class="stamp-circle extra">
+              <span>Печать<br>№2</span>
+            </div>
+          </div>
+          <div class="stamp-item extra">
+            <div class="stamp-triangle extra"></div>
+          </div>
+        ` : ''}
+      </div>
+      
     </div>
   `;
 }
 
 // ==========================================
-// Предупреждения
+// Toast уведомления
 // ==========================================
 
-function renderWarnings(validation) {
-  const container = document.getElementById('warnings-container');
-  if (!container) return;
+function showToast(type, title, message) {
+  const toast = document.getElementById('toast');
+  const iconEl = document.getElementById('toast-icon');
+  const titleEl = document.getElementById('toast-title');
+  const messageEl = document.getElementById('toast-message');
   
-  let html = '';
+  const icons = {
+    warning: '<svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+    error: '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    success: '<svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+  };
   
-  validation.errors.forEach(error => {
-    html += `
-      <div class="bg-red-50 border-2 border-red-400 rounded-xl p-4 mb-4">
-        <div class="flex items-start gap-3">
-          <div class="text-2xl">🚫</div>
-          <div>
-            <h3 class="font-bold text-red-800">Ошибка!</h3>
-            <p class="text-red-700 text-sm mt-1">${error.message}</p>
-          </div>
-        </div>
-      </div>
-    `;
-  });
+  const bgColors = {
+    warning: 'bg-amber-50 border-amber-300',
+    error: 'bg-red-50 border-red-300',
+    success: 'bg-green-50 border-green-300'
+  };
   
-  validation.warnings.forEach(warning => {
-    let detailsHtml = '';
-    if (warning.details) {
-      detailsHtml = '<ul class="text-amber-700 text-sm mt-2 space-y-1">' +
-        warning.details.map(d => `<li>${d}</li>`).join('') +
-        '</ul>';
-    }
-    
-    html += `
-      <div class="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 mb-4 warning-box">
-        <div class="flex items-start gap-3">
-          <div class="text-2xl">⚠️</div>
-          <div>
-            <h3 class="font-bold text-amber-800">${warning.message}</h3>
-            ${detailsHtml}
-          </div>
-        </div>
-      </div>
-    `;
-  });
+  iconEl.innerHTML = icons[type] || icons.warning;
+  titleEl.textContent = title;
+  titleEl.className = `font-semibold ${type === 'warning' ? 'text-amber-800' : type === 'error' ? 'text-red-800' : 'text-green-800'}`;
+  messageEl.innerHTML = message;
+  messageEl.className = `text-sm mt-1 ${type === 'warning' ? 'text-amber-700' : type === 'error' ? 'text-red-700' : 'text-green-700'}`;
   
-  container.innerHTML = html;
+  toast.querySelector('.toast-content').className = `toast-content ${bgColors[type]}`;
+  toast.classList.add('show');
 }
 
-// ==========================================
-// Панель настроек
-// ==========================================
-
-function updateSettingsPanel() {
-  if (!selectedMed) return;
-  
-  document.getElementById('pack-count').value = currentSettings.packCount;
-  document.getElementById('tablets-per-dose').value = currentSettings.tabletsPerDose;
-  document.getElementById('doses-per-day').value = currentSettings.dosesPerDay;
-  document.getElementById('timing-select').value = currentSettings.timing;
-  
-  const maxInfo = document.getElementById('max-dose-info');
-  if (maxInfo) {
-    maxInfo.textContent = `⚡ Макс. ${selectedMed.maxTabsPerDay} ${selectedMed.formRus}/день`;
-  }
-  
-  const maxUnitsInfo = document.getElementById('max-units-info');
-  if (maxUnitsInfo) {
-    maxUnitsInfo.textContent = `📦 Без доп. оформления: до ${selectedMed.maxUnits} ${selectedMed.formRus}`;
-  }
-  
-  updateCalculation();
-}
-
-function updateCalculation() {
-  if (!selectedMed) return;
-  
-  const totalTablets = selectedMed.quantity * currentSettings.packCount;
-  const tabletsPerDay = currentSettings.tabletsPerDose * currentSettings.dosesPerDay;
-  const days = Math.floor(totalTablets / tabletsPerDay);
-  
-  const calcEl = document.getElementById('calc-result');
-  if (calcEl) {
-    const isOk = days <= 30 && totalTablets <= selectedMed.maxUnits && tabletsPerDay <= selectedMed.maxTabsPerDay;
-    const colorClass = isOk ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700';
-    const emoji = isOk ? '✅' : '⚠️';
-    
-    calcEl.className = `p-3 rounded-lg border ${colorClass}`;
-    calcEl.innerHTML = `
-      <div class="flex items-center justify-between text-sm">
-        <span>${emoji} Всего: <strong>${totalTablets} ${selectedMed.formRus}</strong></span>
-        <span>Хватит на: <strong>${days} ${getDaysWord(days)}</strong></span>
-      </div>
-    `;
-  }
+function hideToast() {
+  document.getElementById('toast')?.classList.remove('show');
 }
 
 // ==========================================
@@ -524,9 +443,14 @@ function numberToWords(num) {
   return words[num] || num.toString();
 }
 
-function getTabletWord(num) {
-  if (num === 1) return 'таблетке';
-  if (num >= 2 && num <= 4) return 'таблетки';
+function getFormWord(form, count) {
+  if (form === 'caps') {
+    if (count === 1) return 'капсуле';
+    if (count >= 2 && count <= 4) return 'капсулы';
+    return 'капсул';
+  }
+  if (count === 1) return 'таблетке';
+  if (count >= 2 && count <= 4) return 'таблетки';
   return 'таблеток';
 }
 
@@ -544,13 +468,20 @@ function showEmptyState() {
   const container = document.getElementById('recipe-container');
   if (container && !selectedMed) {
     container.innerHTML = `
-      <div class="text-center py-16 px-8 bg-white rounded-2xl shadow-sm">
-        <div class="text-6xl mb-4 emoji-float">💊</div>
+      <div class="text-center py-16 px-8 bg-white rounded-2xl shadow-sm border border-gray-100">
+        <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-cyan-100 to-blue-100 rounded-full flex items-center justify-center">
+          <svg class="w-10 h-10 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+          </svg>
+        </div>
         <h3 class="text-xl font-semibold text-gray-700 mb-2">Выберите препарат</h3>
         <p class="text-gray-500 mb-6">Нажмите на препарат в меню слева, чтобы сформировать рецепт</p>
         <div class="lg:hidden">
-          <button onclick="openSidebar()" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition">
-            📋 Открыть список препаратов
+          <button onclick="openSidebar()" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-6 py-3 rounded-xl font-medium shadow-lg hover:shadow-xl transition inline-flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+            Открыть список препаратов
           </button>
         </div>
       </div>
@@ -583,71 +514,21 @@ function setupEventListeners() {
   document.getElementById('sidebar-overlay')?.addEventListener('click', closeSidebar);
   document.getElementById('close-sidebar')?.addEventListener('click', closeSidebar);
   
-  document.getElementById('pack-count')?.addEventListener('input', (e) => {
-    currentSettings.packCount = Math.max(1, parseInt(e.target.value) || 1);
-    updateRecipeForm();
-    updateCalculation();
-  });
-  
   document.getElementById('pack-minus')?.addEventListener('click', () => {
-    if (currentSettings.packCount > 1) {
-      currentSettings.packCount--;
-      document.getElementById('pack-count').value = currentSettings.packCount;
+    if (packCount > 1) {
+      packCount--;
+      document.getElementById('pack-count').textContent = packCount;
       updateRecipeForm();
-      updateCalculation();
     }
   });
   
   document.getElementById('pack-plus')?.addEventListener('click', () => {
-    currentSettings.packCount++;
-    document.getElementById('pack-count').value = currentSettings.packCount;
-    updateRecipeForm();
-    updateCalculation();
-  });
-  
-  document.getElementById('tablets-per-dose')?.addEventListener('input', (e) => {
-    currentSettings.tabletsPerDose = Math.max(1, parseInt(e.target.value) || 1);
-    updateRecipeForm();
-    updateCalculation();
-  });
-  
-  document.getElementById('tablets-minus')?.addEventListener('click', () => {
-    if (currentSettings.tabletsPerDose > 1) {
-      currentSettings.tabletsPerDose--;
-      document.getElementById('tablets-per-dose').value = currentSettings.tabletsPerDose;
-      updateRecipeForm();
-      updateCalculation();
-    }
-  });
-  
-  document.getElementById('tablets-plus')?.addEventListener('click', () => {
-    currentSettings.tabletsPerDose++;
-    document.getElementById('tablets-per-dose').value = currentSettings.tabletsPerDose;
-    updateRecipeForm();
-    updateCalculation();
-  });
-  
-  document.getElementById('doses-per-day')?.addEventListener('change', (e) => {
-    currentSettings.dosesPerDay = parseInt(e.target.value) || 1;
-    
-    if (currentSettings.dosesPerDay === 1) {
-      currentSettings.timing = 'на ночь';
-    } else if (currentSettings.dosesPerDay === 2) {
-      currentSettings.timing = 'утром и на ночь';
-    } else {
-      currentSettings.timing = `${currentSettings.dosesPerDay} раза в день`;
-    }
-    document.getElementById('timing-select').value = currentSettings.timing;
-    
-    updateRecipeForm();
-    updateCalculation();
-  });
-  
-  document.getElementById('timing-select')?.addEventListener('change', (e) => {
-    currentSettings.timing = e.target.value;
+    packCount++;
+    document.getElementById('pack-count').textContent = packCount;
     updateRecipeForm();
   });
   
+  // Переключение табов
   document.querySelectorAll('[data-tab]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const tab = e.currentTarget.dataset.tab;
@@ -660,7 +541,7 @@ function switchTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   document.getElementById(`tab-${tabName}`)?.classList.remove('hidden');
   
-  document.querySelectorAll('[data-tab]').forEach(btn => {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.remove('bg-blue-600', 'text-white');
     btn.classList.add('bg-gray-100', 'text-gray-700');
   });
@@ -673,3 +554,4 @@ function switchTab(tabName) {
 window.selectMedication = selectMedication;
 window.openSidebar = openSidebar;
 window.closeSidebar = closeSidebar;
+window.hideToast = hideToast;
